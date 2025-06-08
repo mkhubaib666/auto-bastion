@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/mkhubaib666/auto-bastion/actions/workflows/ci.yml/badge.svg)](https://github.com/mkhubaib666/auto-bastion/actions/workflows/ci.yml)
 
-Auto-Bastion solves the problem of secure, temporary access to private resources (like databases, caches, or servers) in your VPC. It eliminates the need for costly, high-risk permanent bastion hosts or complex VPNs.
+Auto-Bastion solves the problem of secure, temporary access to private resources (like databases, caches, or servers) in your VPC. It eliminates the need for costly, high-risk permanent bastion hosts or complex VPNs .
 
 ---
 
