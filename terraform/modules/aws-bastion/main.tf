@@ -62,9 +62,9 @@ resource "aws_security_group_rule" "bastion_to_target" {
 
 # The ephemeral bastion host
 resource "aws_instance" "bastion_host" {
-  ami           = data.aws_ami.amazon_linux_2_arm.id
-  instance_type = var.instance_type
-  key_name      = aws_key_pair.generated_key.key_name
+  ami                    = data.aws_ami.amazon_linux_2_arm.id
+  instance_type          = var.instance_type
+  key_name               = aws_key_pair.generated_key.key_name
   vpc_security_group_ids = [aws_security_group.bastion_sg.id]
 
   tags = merge(var.tags, {

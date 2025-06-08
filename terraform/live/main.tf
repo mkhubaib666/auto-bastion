@@ -52,10 +52,10 @@ resource "null_resource" "download_terraform" {
 
 # Create a Lambda Layer containing the Terraform binary
 resource "aws_lambda_layer_version" "terraform_layer" {
-  layer_name = "${var.project_name}-terraform-layer"
-  filename   = "terraform" # This should point to the downloaded binary
+  layer_name          = "${var.project_name}-terraform-layer"
+  filename            = "terraform" # This should point to the downloaded binary
   compatible_runtimes = ["python3.9"]
-  depends_on = [null_resource.download_terraform]
+  depends_on          = [null_resource.download_terraform]
 }
 
 # Package the provisioner Lambda function
@@ -75,13 +75,13 @@ data "archive_file" "destroyer_zip" {
 # --- Lambda Function Resources ---
 
 resource "aws_lambda_function" "provisioner" {
-  function_name = "${var.project_name}-provisioner"
-  role          = aws_iam_role.lambda_exec_role.arn
-  handler       = "main.handler"
-  runtime       = "python3.9"
-  timeout       = 300 # 5 minutes
-  memory_size   = 256
-  filename      = data.archive_file.provisioner_zip.output_path
+  function_name    = "${var.project_name}-provisioner"
+  role             = aws_iam_role.lambda_exec_role.arn
+  handler          = "main.handler"
+  runtime          = "python3.9"
+  timeout          = 300 # 5 minutes
+  memory_size      = 256
+  filename         = data.archive_file.provisioner_zip.output_path
   source_code_hash = data.archive_file.provisioner_zip.output_base64sha256
 
   layers = [aws_lambda_layer_version.terraform_layer.arn]
@@ -97,13 +97,13 @@ resource "aws_lambda_function" "provisioner" {
 }
 
 resource "aws_lambda_function" "destroyer" {
-  function_name = "${var.project_name}-destroyer"
-  role          = aws_iam_role.lambda_exec_role.arn
-  handler       = "main.handler"
-  runtime       = "python3.9"
-  timeout       = 300
-  memory_size   = 256
-  filename      = data.archive_file.destroyer_zip.output_path
+  function_name    = "${var.project_name}-destroyer"
+  role             = aws_iam_role.lambda_exec_role.arn
+  handler          = "main.handler"
+  runtime          = "python3.9"
+  timeout          = 300
+  memory_size      = 256
+  filename         = data.archive_file.destroyer_zip.output_path
   source_code_hash = data.archive_file.destroyer_zip.output_base64sha256
 
   layers = [aws_lambda_layer_version.terraform_layer.arn]
