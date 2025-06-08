@@ -1,0 +1,26 @@
+# Example configuration for Auto-Bastion.
+# Rename to 'config.yaml' and upload to your S3 config bucket.
+
+slack:
+  # Get this from your Slack App's "OAuth & Permissions" page
+  bot_token: "xoxb-..."
+  # Get this from your Slack App's "Basic Information" page
+  signing_secret: "..."
+
+# Define the resources users can request access to.
+# The key (e.g., 'rds-main-replica') is what users will type in Slack.
+targets:
+  rds-main-replica:
+    # The AWS Security Group ID of the resource you want to access.
+    # The bastion will be allowed to connect to this SG.
+    target_sg_id: "sg-0123456789abcdef0"
+    # The port on the target resource to allow access to.
+    target_port: 5432
+    # The DNS name or IP of the actual resource. This is used to build the
+    # final SSH command for the user.
+    target_host: "my-db.c123xyz.us-east-1.rds.amazonaws.com"
+
+  internal-app:
+    target_sg_id: "sg-fedcba9876543210f"
+    target_port: 8080
+    target_host: "10.0.1.50"
