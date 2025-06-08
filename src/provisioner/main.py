@@ -40,7 +40,6 @@ def verify_slack_request(headers, body):
     timestamp = headers["x-slack-request-timestamp"]
     signature = headers["x-slack-signature"]
 
-    # Check if the request is older than 5 minutes
     if abs(time.time() - int(timestamp)) > 60 * 5:
         return False
 
@@ -51,7 +50,6 @@ def verify_slack_request(headers, body):
             slack_signing_secret.encode("utf-8"), sig_basestring, hashlib.sha256
         ).hexdigest()
     )
-
     return hmac.compare_digest(my_signature, signature)
 
 
@@ -67,7 +65,7 @@ def parse_command(body):
             params[key] = value
     return {
         "target": params.get("target"),
-        "duration": int(params.get("duration", 60)),  # Default 60 mins
+        "duration": int(params.get("duration", 60)),
         "user_id": parsed_body.get("user_id", [""])[0],
         "user_name": parsed_body.get("user_name", [""])[0],
         "response_url": parsed_body.get("response_url", [""])[0],
@@ -77,15 +75,12 @@ def parse_command(body):
 def run_terraform(command, working_dir):
     """Executes a Terraform command."""
     logger.info(f"Running 'terraform {command}' in {working_dir}")
-    # We need to copy the terraform executable to /tmp as it's the only
-    # writable directory with exec permissions in Lambda.
-    subprocess.run(["cp", "/opt/terraform", "/tmp/terraform"])
-    subprocess.run(["chmod", "+x", "/tmp/terraform"])
+    subprocess.run(["cp", "/opt/terraform", "/tmp/terraform"], check=True)
+    subprocess.run(["chmod", "+x", "/tmp/terraform"], check=True)
 
     process = subprocess.run(
         [f"/tmp/terraform {command}"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         shell=True,
         cwd=working_dir,
         text=True,
@@ -99,7 +94,6 @@ def run_terraform(command, working_dir):
 
 def handler(event, context):
     """Main Lambda handler."""
-    # Load configuration
     try:
         app_config = get_config()
         slack_client = WebClient(token=app_config["slack"]["bot_token"])
@@ -107,19 +101,22 @@ def handler(event, context):
         logger.error(f"Configuration error: {e}")
         return {"statusCode": 500, "body": "Internal configuration error."}
 
-    # Verify request
     body = event["body"]
     if not verify_slack_request(event["headers"], body):
         return {"statusCode": 403, "body": "Verification failed."}
 
-    # Acknowledge the request immediately
     command = parse_command(body)
-    slack_client.chat_postMessage(
-        channel=command["user_id"],
-        text=f"Got it, {command['user_name']}! Provisioning access to `{command['target']}`. This might take a minute...",
-    )
+    try:
+        slack_client.chat_postMessage(
+            channel=command["user_id"],
+            text=(
+                f"Got it, {command['user_name']}! Provisioning access to"
+                f" `{command['target']}`. This might take a minute..."
+            ),
+        )
+    except SlackApiError as e:
+        logger.error(f"Error posting initial message: {e}")
 
-    # --- Main Logic ---
     try:
         target_config = app_config["targets"].get(command["target"])
         if not target_config:
@@ -127,16 +124,13 @@ def handler(event, context):
 
         request_id = f"{command['user_name']}-{int(time.time())}"
 
-        # Create a temporary directory to run Terraform
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Copy Terraform module files to tmpdir
-            # This assumes the module is packaged with the Lambda
             subprocess.run(
                 f"cp -r {os.environ['LAMBDA_TASK_ROOT']}/terraform_module/* {tmpdir}/",
                 shell=True,
+                check=True,
             )
 
-            # Create tfvars file
             tfvars = {
                 "user_ssh_key_name": request_id,
                 "user_public_ip": event["requestContext"]["http"]["sourceIp"],
@@ -152,17 +146,14 @@ def handler(event, context):
             with open(os.path.join(tmpdir, "terraform.tfvars.json"), "w") as f:
                 json.dump(tfvars, f)
 
-            # Run Terraform
-            run_terraform("init", tmpdir)
+            run_terraform("init -input=false", tmpdir)
             run_terraform("apply -auto-approve -json", tmpdir)
 
-            # Get outputs
             output_json = run_terraform("output -json", tmpdir)
             outputs = json.loads(output_json)
             bastion_ip = outputs["bastion_public_ip"]["value"]
             private_key = outputs["ssh_private_key_pem"]["value"]
 
-        # Schedule the teardown
         events.put_rule(
             Name=request_id,
             ScheduleExpression=f"rate({command['duration']} minutes)",
@@ -180,7 +171,6 @@ def handler(event, context):
             ],
         )
 
-        # Send connection details to user
         ssh_command = (
             f"ssh -i {request_id}.pem -L "
             f"{target_config['target_port']}:{target_config['target_host']}:{target_config['target_port']} "
@@ -194,7 +184,7 @@ def handler(event, context):
             initial_comment=(
                 f"Access granted for *{command['duration']} minutes*!\n\n"
                 f"1. Save the attached file as `{request_id}.pem` and run `chmod 400 {request_id}.pem`.\n"
-                f"2. Use this command to connect:\n"
+                "2. Use this command to connect:\n"
                 f"```{ssh_command}```"
             ),
         )

@@ -14,13 +14,12 @@ events = boto3.client("events")
 def run_terraform(command, working_dir):
     """Executes a Terraform command."""
     logger.info(f"Running 'terraform {command}' in {working_dir}")
-    subprocess.run(["cp", "/opt/terraform", "/tmp/terraform"])
-    subprocess.run(["chmod", "+x", "/tmp/terraform"])
+    subprocess.run(["cp", "/opt/terraform", "/tmp/terraform"], check=True)
+    subprocess.run(["chmod", "+x", "/tmp/terraform"], check=True)
 
     process = subprocess.run(
         [f"/tmp/terraform {command}"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         shell=True,
         cwd=working_dir,
         text=True,
@@ -40,19 +39,17 @@ def handler(event, context):
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Recreate the environment to run destroy
             subprocess.run(
                 f"cp -r {os.environ['LAMBDA_TASK_ROOT']}/terraform_module/* {tmpdir}/",
                 shell=True,
+                check=True,
             )
             with open(os.path.join(tmpdir, "terraform.tfvars.json"), "w") as f:
                 json.dump(tfvars, f)
 
-            # Run destroy
-            run_terraform("init", tmpdir)
+            run_terraform("init -input=false", tmpdir)
             run_terraform("destroy -auto-approve", tmpdir)
 
-        # Clean up the EventBridge rule
         events.remove_targets(Rule=request_id, Ids=["destroyer-lambda"])
         events.delete_rule(Name=request_id)
 
@@ -60,7 +57,6 @@ def handler(event, context):
 
     except Exception as e:
         logger.error(f"Failed to destroy resources for {request_id}: {e}")
-        # You might want to add alerting here (e.g., SNS)
         raise
 
     return {"statusCode": 200, "body": json.dumps("Teardown complete.")}
